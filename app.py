@@ -2,20 +2,38 @@ import streamlit as st
 import pandas as pd
 from model import predict_effectiveness
 
-st.title("Genomic Drug Effectiveness AI Prototype")
-st.write("Upload your genomic data CSV to predict how effective the drug will be.")
+# App Title
+st.title("🧬 Genomic Drug Effectiveness Predictor")
+st.subheader("Personalized Medicine Prototype")
 
-uploaded_file = st.file_uploader("Upload Genome CSV", type=["csv"])
+# Sidebar
+st.sidebar.title("📁 Upload Section")
+uploaded_file = st.sidebar.file_uploader("Upload Genome CSV", type=["csv"])
+
+st.markdown("""
+<style>
+    .main {
+        background-color: #F0F2F6;
+    }
+</style>
+""", unsafe_allow_html=True)
 
 if uploaded_file:
+    st.success("File uploaded successfully!")
+
     df = pd.read_csv(uploaded_file)
-    st.write("Uploaded Genome Data:")
+    st.write("### 📊 Uploaded Genomic Data")
     st.dataframe(df)
 
-    # Convert first row to dictionary for prototype
+    st.write("### 🔍 Prediction")
     genes = df.iloc[0].to_dict()
-
     score = predict_effectiveness(genes)
 
-    st.subheader("Predicted Drug Effectiveness:")
-    st.success(f"{score} % Effective")
+    st.markdown(f"""
+    <div style='padding:15px;background:white;border-radius:12px;box-shadow:0px 3px 10px rgba(0,0,0,0.1);'>
+    <h2>Drug Effectiveness: {score}%</h2>
+    </div>
+    """, unsafe_allow_html=True)
+else:
+    st.info("Please upload a genomic CSV using the sidebar.")
+
