@@ -1,66 +1,106 @@
-# app.py
 import streamlit as st
 import pandas as pd
-from utils import parse_23andme_csv, parse_vcf
-from model import compute_drug_scores, RSID_TO_GENE, DRUGS
+import re
 
-st.set_page_config(page_title="Genomic Drug Effectiveness AI", layout="centered")
+st.title("Genomic Drug Response AI (Prototype)")
 
-st.title("🧬 Genomic Drug Effectiveness AI (Prototype)")
-st.markdown(
-    "Upload a **23andMe-style CSV** or a **VCF** file. The app reads pharmacogenomic markers "
-    "and returns a simple predicted effectiveness score for a few common drugs. **Non-clinical demo only.**"
-)
+st.write("Upload your genomic data (CSV or VCF) to predict drug effectiveness.")
 
-uploaded = st.file_uploader("Upload genomic file (CSV or VCF)", type=["csv", "txt", "vcf", "gz"])
-if uploaded is None:
-    st.info("Try the sample files in `sample_data/` or upload your own 23andMe-style CSV / VCF.")
-    st.markdown("**What to upload:** a 23andMe raw data file (rsid,chromosome,position,genotype) or a VCF containing rsIDs.")
-else:
-    st.write("File uploaded:", uploaded.name)
-    # detect type
-    fname = uploaded.name.lower()
-    try:
-        if fname.endswith(".vcf") or fname.endswith(".vcf.gz") or uploaded.name.lower().endswith(".gz"):
-            # assume VCF (gz handler: Streamlit gives file-like; parse raw text)
-            snp_dict = parse_vcf(uploaded)
-            st.success(f"Parsed VCF: {len(snp_dict)} rsIDs found (showing up to 10).")
-        else:
-            # CSV or txt
-            snp_dict = parse_23andme_csv(uploaded)
-            st.success(f"Parsed CSV: {len(snp_dict)} markers found (showing up to 10).")
-    except Exception as e:
-        st.error("Failed to parse file: " + str(e))
-        st.stop()
+# -----------------------------
+# FILE PARSER FUNCTIONS INSIDE SAME FILE
+# -----------------------------
 
-    # show top markers
-    if len(snp_dict) == 0:
-        st.warning("No recognizable markers found in the file. Make sure the file contains rsIDs or a genotype table.")
+def parse_csv(file):
+    df = pd.read_csv(file)
+    return df
+
+def parse_vcf(file):
+    rows = []
+    for line in file:
+        line = line.decode("utf-8")
+        if line.startswith("#"):
+            continue
+        parts = line.strip().split("\t")
+        if len(parts) > 4:
+            chrom, pos, rsid, ref, alt = parts[:5]
+            rows.append([rsid, chrom, pos, ref + "/" + alt])
+    df = pd.DataFrame(rows, columns=["rsid", "chromosome", "position", "genotype"])
+    return df
+
+# -----------------------------
+# DRUG–GENE DATABASE (VERY BASIC PROTOTYPE)
+# -----------------------------
+drug_genes = {
+    "Paracetamol": {
+        "UGT1A1": {"rs8175347": {"TA6/TA7": "Slow", "TA7/TA7": "Very Slow"}}
+    },
+    "Ibuprofen": {
+        "CYP2C9": {"rs1057910": {"AA": "Fast", "AC": "Normal", "CC": "Slow"}}
+    },
+    "Caffeine": {
+        "CYP1A2": {"rs762551": {"AA": "Fast", "AC": "Medium", "CC": "Slow"}}
+    }
+}
+
+# -----------------------------
+# EFFECTIVENESS SCORE
+# -----------------------------
+def score_effectiveness(speed):
+    if speed == "Fast":
+        return 85
+    if speed == "Medium" or speed == "Normal":
+        return 70
+    if speed == "Slow":
+        return 40
+    if speed == "Very Slow":
+        return 20
+    return 50
+
+# -----------------------------
+# ANALYSIS FUNCTION
+# -----------------------------
+def analyze(df, drug):
+    result = {}
+    gene_info = drug_genes[drug]
+
+    for gene, snps in gene_info.items():
+        for rsid, variants in snps.items():
+            row = df[df["rsid"] == rsid]
+            if not row.empty:
+                gt = row.iloc[0]["genotype"]
+                # Genotype formatting correction
+                gt = gt.replace("/", "").replace("-", "")
+                for v, metabolism in variants.items():
+                    v_clean = v.replace("/", "")
+                    if gt == v_clean:
+                        result[gene] = metabolism
+
+    if result:
+        metabolism = list(result.values())[0]
+        effectiveness = score_effectiveness(metabolism)
+        return metabolism, effectiveness
     else:
-        df_preview = pd.DataFrame(list(snp_dict.items()), columns=["marker", "genotype"]).head(25)
-        st.write("Sample of parsed markers:")
-        st.dataframe(df_preview)
+        return "Unknown", 50
 
-    # compute drug scores
-    with st.spinner("Analyzing pharmacogenomic markers and computing drug-effectiveness..."):
-        results = compute_drug_scores(snp_dict)
+# -----------------------------
+# FILE UPLOAD
+# -----------------------------
+file = st.file_uploader("Upload CSV or VCF file", type=["csv", "txt", "vcf"])
 
-    st.markdown("## Results")
-    for drug, res in results.items():
-        score = res["score"]
-        phenotype = res["phenotype"]
-        explanation = res["explanation"]
-        col1, col2 = st.columns([1,3])
-        with col1:
-            # simple visual score
-            st.metric(label=drug, value=f"{score} %")
-        with col2:
-            st.write(f"**Phenotype:** {phenotype.capitalize()}")
-            st.write(explanation)
-            # advice-like message (prototype)
-            if drug == "Clopidogrel" and phenotype == "poor":
-                st.warning("⚠️ Warning: Poor CYP2C19 function may reduce Clopidogrel activation. This prototype is not clinical advice; consult a clinician.")
-            if drug == "Codeine" and phenotype == "poor":
-                st.info("Note: Codeine may be ineffective for poor CYP2D6 metabolizers.")
-    st.markdown("---")
-    st.caption("This is a simplified prototype. Real clinical decision requires validated lab reports and medical professionals.")
+if file:
+    if file.name.endswith(".csv"):
+        df = parse_csv(file)
+    else:
+        df = parse_vcf(file)
+
+    st.success("File uploaded & processed!")
+    st.dataframe(df.head())
+
+    drug = st.selectbox("Select a drug to evaluate:", list(drug_genes.keys()))
+
+    if st.button("Predict Drug Effectiveness"):
+        metabolism, effectiveness = analyze(df, drug)
+
+        st.subheader("Result")
+        st.write(f"**Metabolism speed:** {metabolism}")
+        st.write(f"**Predicted drug effectiveness:** {effectiveness} / 100")
