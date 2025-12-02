@@ -100,7 +100,7 @@ def analyze(df, drug):
 
 st.set_page_config(page_title="Genomic Drug AI", layout="wide")
 
-st.title("🧬 Genomic Drug Effectiveness AI")
+st.title(" Genomic Drug Effectiveness AI")
 st.caption("Prototype – Pharmacogenomics powered prediction engine")
 
 uploaded = st.file_uploader("Upload your genome file (CSV or VCF)", type=["csv", "txt", "vcf"])
@@ -112,10 +112,10 @@ if uploaded:
         df = parse_csv(uploaded)
 
     st.success("File successfully processed.")
-    st.write("📌 Detected markers sample:")
+    st.write(" Detected markers sample:")
     st.dataframe(df.head())
 
-    st.subheader("🔍 Search & Select Drug")
+    st.subheader(" Search & Select Drug")
     search = st.text_input("Search drug name")
     
     filtered_list = [d for d in drug_genes.keys() if search.lower() in d.lower()] if search else list(drug_genes.keys())
@@ -126,17 +126,17 @@ if uploaded:
         metabolism_dict, effectiveness = analyze(df, drug)
 
         st.markdown("---")
-        st.subheader(f"📌 Prediction Output — {drug}")
-        st.write(f"🧪 **Effectiveness Score:** `{effectiveness}/100`")
+        st.subheader(f" Prediction Output — {drug}")
+        st.write(f" **Effectiveness Score:** `{effectiveness}/100`")
 
         if effectiveness > 80:
-            st.success("⚡ High effectiveness expected.")
+            st.success(" High effectiveness expected.")
         elif effectiveness >= 50:
             st.warning("⚠ Moderate response expected.")
         else:
-            st.error("❗ Low effectiveness predicted. Consider alternative or dosage discussion.")
+            st.error(" Low effectiveness predicted. Consider alternative or dosage discussion.")
 
-        st.write("💡 Gene Interpretation:")
+        st.write(" Gene Interpretation:")
         for gene, status in metabolism_dict.items():
             st.write(f"• **{gene} → {status}**")
 
